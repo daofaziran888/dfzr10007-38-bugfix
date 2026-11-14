@@ -14,9 +14,13 @@ class Store:
         self._tables: dict[str, list[dict[str, Any]]] = {
             name: [dict(row) for row in rows] for name, rows in SEED_ROWS.items()
         }
+        # 采样结果是采样配置的写入产物（样本输出表），独立于种子模块清单，
+        # 不参与运营概览的模块计数。
+        self._tables.setdefault("sample_result", [])
 
     def module_names(self) -> list[str]:
-        return sorted(self._tables)
+        # sample_result 这类内部产物表不计入业务模块清单
+        return sorted(name for name in self._tables if name in SEED_ROWS)
 
     def rows(self, module: str) -> list[dict[str, Any]]:
         return self._tables.setdefault(module, [])

@@ -6,11 +6,9 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Query
 
 from app.schemas import ActionResult, EntryPayload, PageResult
-from app.services.etl import EtlService
+from app.services.etl import service
 
 router = APIRouter(prefix="/api/etl", tags=["数据准备流水线"])
-
-service = EtlService()
 
 LIST_FIELDS = ["任务编号", "任务名称", "输入源", "转换步骤", "输出目标", "调度周期", "依赖关系", "任务状态"]
 STATUSES = ["草稿", "运行中", "已暂停", "已完成"]
@@ -28,6 +26,22 @@ def list_entries(
         raise HTTPException(status_code=400, detail="每页最多 200 条，请缩小分页范围")
     items, total = service.list_entries(keyword=keyword, status=status, page=page, size=size)
     return PageResult(items=items, total=total, page=page, size=size)
+
+
+@router.get("/inputs/{entry_id}", response_model=dict)
+def get_pipeline_input(entry_id: int) -> dict[str, Any]:
+    """流水线输入详情：沿输入源（样本输出表）回读采样配置、随机种子与分层输入。"""
+    detail = service.get_pipeline_input(entry_id)
+    if detail is None:
+        raise HTTPException(status_code=404, detail=f"准备任务 {entry_id} 不存在或已归档")
+    return detail
+
+
+@router.get("/export")
+def export_entries() -> dict[str, Any]:
+    """导出数据准备流水线清单：返回当前过滤条件下的全量数据。"""
+    items, total = service.list_entries(page=1, size=10000)
+    return {"module": "etl", "total": total, "items": items}
 
 
 @router.get("/{entry_id}", response_model=dict)
@@ -56,10 +70,3 @@ def run_action(entry_id: int, payload: EntryPayload) -> ActionResult:
     if entry is None:
         return ActionResult(ok=False, message=message)
     return ActionResult(ok=True, message=message, entry=entry)
-
-
-@router.get("/export")
-def export_entries() -> dict[str, Any]:
-    """导出数据准备流水线清单：返回当前过滤条件下的全量数据。"""
-    items, total = service.list_entries(page=1, size=10000)
-    return {"module": "etl", "total": total, "items": items}
